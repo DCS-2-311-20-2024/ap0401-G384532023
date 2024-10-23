@@ -97,11 +97,7 @@ function init() {
   function resetGame() {
     score = 0; // スコアをリセット
     life = totalLife; // ライフを初期値に戻す
-    bricks.children.forEach((brick) => {
-      brick.visible = true; // 全てのブロックを表示
-    });
-    
-    makeBricks(); // ブロックを再生成
+    resetBrick()
     setScore(); // スコアとライフを更新
   }
 
