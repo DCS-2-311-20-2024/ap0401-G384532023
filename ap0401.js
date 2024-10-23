@@ -26,6 +26,7 @@ function init() {
   // 座標軸の設定
   const axes = new THREE.AxesHelper(18);
   scene.add(axes);
+  
 
   // ブロック数のカウント
   let nBrick = 0
@@ -33,7 +34,12 @@ function init() {
   // スコア表示
   let score = 0;
   let life = 3;
+  const totalLife = 3; // 最大ライフを保持
   function setScore(score) {
+    document.getElementById("score").innerText
+    = String(Math.round(score)).padStart(8,"0");
+    document.getElementById("life").innerHTML
+    = (life > 0) ? "○○○".substring(0, life) : "-- Game Over --";
   }
 
   // Geometry の分割数
@@ -47,6 +53,7 @@ function init() {
     new THREE.SphereGeometry(ballR, nSeg, nSeg),
     new THREE.MeshPhongMaterial({ color: 0x808080, shininess: 100, specular: 0xa0a0a0 })
   );
+  ball.geometry.computeBoundingSphere();
   scene.add(ball);
 
   // ボールの移動
@@ -73,12 +80,29 @@ function init() {
   function stopBall() {
     ballLive = false;
     speed = 0;
+    life--;
+    if (life <= 0) {
+      resetGame(); // ゲームをリセットする関数を呼び出す
+    }
   }
 
   // ボールを動かす
   function startBall() {
     ballLive = true;
     speed = 10;
+    if (life <= 0) {
+      resetGame(); // ゲームをリセットする
+    }
+  }
+  function resetGame() {
+    score = 0; // スコアをリセット
+    life = totalLife; // ライフを初期値に戻す
+    bricks.children.forEach((brick) => {
+      brick.visible = true; // 全てのブロックを表示
+    });
+    
+    makeBricks(); // ブロックを再生成
+    setScore(); // スコアとライフを更新
   }
 
   // マウスクリックでスタートする
@@ -219,13 +243,16 @@ function init() {
       else if (ball.position.x < paddle.position.x - paddleL / 2){
         vx = -Math.abs(vx);
       }
+      if (nBrick <= 0){
+        resetBrick();
+      }
     }
   }
 
   // ブロック ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
   // ブロックの生成
   const bricks = new THREE.Group();
-  {
+  function makeBricks(){
     const color = ["white", "red", "yellow", "blue", "purple", "green"];
     const h = 0.8; /* ブロックの高さ */
     const d = 0.4; /* ブロックの奥行 */
@@ -235,24 +262,77 @@ function init() {
     // ブロックの幅
     const w = (hFrameW - 2 * vFrameW - (param.nCol + 1) * gapX) / param.nCol;
     // ブロックを並べる
+    for (let r = 0; r < param.nRow; r++) {
+      for (let c = 0; c < param.nCol; c++) {
+        // ブロックの作成
+        const brick = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshPhongMaterial({ color: color[r  % color.length] })
+        );
+        brick.position.set((c - (param.nCol - 1) / 2) * (w + gapX)
+        , 0,  
+        -r * (d + gapZ)
+      );
 
-    // ブロック全体を奥に移動する
+      // グループにブロックを追加
+      brick.geometry.computeBoundingBox();
+      bricks.add(brick);
+        nBrick++;
+      }
+    }
+  
+    // ブロック全体を後ろに移動する（必要に応じて Z 軸を調整）
+    bricks.position.z = -4; 
+    scene.add(bricks);
+  }
+  makeBricks();
 
+  function remakeBricks(){
+    stopBall();
+    scene.remove(bricks);
+    bricks.clear();
+    nBrick = 0;
+    makeBricks();
+    scene.add(bricks);
   }
 
   // ブロックの衝突検出
   function brickCheck() {
     let hit = false;
-
+    const sphere = ball.geometry.boundingSphere.clone();
+    sphere.translate(ball.position);
     bricks.children.forEach((brick) => {
+      if (!hit && brick.visible) {
+        let box = brick.geometry.boundingBox.clone();
+        box.translate(bricks.position);
+        box.translate(brick.position);
+        if(box.intersectsSphere(sphere)) {
+          hit = true;
+          brick.visible = false;
+          nBrick--;
+          score += (Math.abs(brick.position.z) + 1) * 100;
+          vz = -vz;
+        }
+      }
     });
   }
 
+  
 
-  // ブロックの再表示
-  function resetBrick() {
 
-  }
+function resetBrick() {
+  // 1. ブロック数を元の数にリセット
+  nBrick = 0;
+
+  // 2. 既存のブロックを削除
+  bricks.children.forEach((brick) => {
+    brick.visible = true;
+    nBrick++;
+  });
+}
+
+
+
 
   // 光源の設定
   const light = new THREE.SpotLight(0xffffff, 1000);
@@ -301,6 +381,8 @@ function init() {
   gui.add(param, "y", -40, 80);
   gui.add(param, "z", -40, 80);
   gui.add(param, "axes");
+  gui.add(param, "nRow", 1, 10, 1).onChange(remakeBricks);
+  gui.add(param, "nCol", 1, 10, 1).onChange(remakeBricks);
   gui.close();
   // 描画
   render();
